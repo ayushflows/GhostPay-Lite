@@ -16,6 +16,7 @@ export interface IUser extends Document {
   isActive: boolean;
   lastLogin: Date;
   failedLoginAttempts: number;
+  outstandingAmount: number;
   createdAt: Date;
   updatedAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
@@ -54,6 +55,10 @@ const UserSchema: Schema = new Schema({
     default: null
   },
   failedLoginAttempts: {
+    type: Number,
+    default: 0
+  },
+  outstandingAmount: {
     type: Number,
     default: 0
   }

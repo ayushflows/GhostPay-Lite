@@ -1,16 +1,19 @@
 import express, { Request, Response } from 'express';
 import { authMiddleware, requireRole } from '../middleware/auth';
 import { UserRole } from '../models/User';
-import Card from '../models/Card';
+import Card, { ICard } from '../models/Card';
 import User from '../models/User';
+import mongoose from 'mongoose';
 
 const router = express.Router();
 
 // Issue new card (only for users)
 router.post('/', authMiddleware, requireRole([UserRole.USER]), async (req: Request, res: Response) => {
   try {
-    const { maxLimit } = req.body;
     const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
 
     // Find user to get their name
     const user = await User.findById(userId);
@@ -18,12 +21,12 @@ router.post('/', authMiddleware, requireRole([UserRole.USER]), async (req: Reque
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Check number of existing cards for the user
-    const existingCardsCount = await Card.countDocuments({ userId });
-    if (existingCardsCount >= 5) {
+    // Check if user can issue new card
+    const canIssueCard = await Card.canIssueNewCard(new mongoose.Types.ObjectId(userId));
+    if (!canIssueCard) {
       return res.status(400).json({ 
-        message: 'Maximum card limit reached',
-        details: 'You can only have a maximum of 5 cards'
+        message: 'Maximum active cards limit reached',
+        details: 'You can only have a maximum of 5 active cards at a time'
       });
     }
 
@@ -34,14 +37,13 @@ router.post('/', authMiddleware, requireRole([UserRole.USER]), async (req: Reque
     const card = new Card({
       ...cardDetails,
       cardHolderName: user.name,
-      maxLimit: maxLimit || 10000,
-      userId
+      userId: new mongoose.Types.ObjectId(userId)
     });
 
     await card.save();
 
     res.status(201).json({
-      message: 'Card issued successfully',
+      message: 'Virtual card issued successfully',
       card: {
         id: card._id,
         cardNumber: card.cardNumber,
@@ -50,10 +52,8 @@ router.post('/', authMiddleware, requireRole([UserRole.USER]), async (req: Reque
         expiryDate: card.expiryDate,
         cvv: card.cvv,
         maxLimit: card.maxLimit,
-        currentBalance: card.currentBalance,
         isActive: card.isActive
-      },
-      cardsRemaining: 5 - (existingCardsCount + 1)
+      }
     });
   } catch (error) {
     console.error('Error issuing card:', error);
@@ -88,11 +88,12 @@ router.get('/:id', authMiddleware, requireRole([UserRole.USER, UserRole.ADMIN]),
       maxLimit: card.maxLimit,
       currentBalance: card.currentBalance,
       isActive: card.isActive,
+      isUsed: card.isUsed,
       transactions: card.transactions
     };
 
-    // Include CVV only for the card owner (user)
-    if (userRole === UserRole.USER) {
+    // Include CVV only for the card owner (user) and if card is not used
+    if (userRole === UserRole.USER && !card.isUsed) {
       Object.assign(cardResponse, { cvv: card.cvv });
     }
 
@@ -102,6 +103,235 @@ router.get('/:id', authMiddleware, requireRole([UserRole.USER, UserRole.ADMIN]),
   } catch (error) {
     console.error('Error retrieving card:', error);
     res.status(500).json({ message: 'Error retrieving card' });
+  }
+});
+
+// Process payment (for merchants)
+router.post('/process-payment', authMiddleware, requireRole([UserRole.MERCHANT]), async (req: Request, res: Response) => {
+  try {
+    const { cardNumber, amount, description } = req.body;
+    const merchantId = req.user?.userId;
+    if (!merchantId) {
+      return res.status(401).json({ message: 'Merchant not authenticated' });
+    }
+
+    // Find the card
+    const card = await Card.findOne({ 
+      cardNumber,
+      isActive: true,
+      isUsed: false
+    });
+
+    if (!card) {
+      return res.status(404).json({ 
+        message: 'Card not found or invalid',
+        details: 'The card may be expired, used, or inactive'
+      });
+    }
+
+    // Check if amount exceeds max limit
+    if (amount > card.maxLimit) {
+      return res.status(400).json({
+        message: 'Amount exceeds card limit',
+        details: `Maximum amount allowed is ${card.maxLimit}`
+      });
+    }
+
+    // Add transaction
+    card.transactions.push({
+      amount,
+      merchantId: new mongoose.Types.ObjectId(merchantId),
+      timestamp: new Date(),
+      status: 'completed',
+      description
+    });
+
+    // Update card status
+    card.currentBalance = amount;
+    card.isUsed = true;
+    card.isActive = false;
+
+    await card.save();
+
+    // Update user's outstanding amount
+    const user = await User.findById(card.userId);
+    if (user) {
+      user.outstandingAmount = (user.outstandingAmount || 0) + amount;
+      await user.save();
+    }
+
+    res.json({
+      message: 'Payment processed successfully',
+      transaction: {
+        amount,
+        merchantId,
+        timestamp: new Date(),
+        status: 'completed',
+        description
+      }
+    });
+  } catch (error) {
+    console.error('Error processing payment:', error);
+    res.status(500).json({ message: 'Error processing payment' });
+  }
+});
+
+// Get user analytics (only for users)
+router.get('/analytics/overview', authMiddleware, requireRole([UserRole.USER]), async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+
+    // Get all cards for the user
+    const cards = await Card.find({ userId: new mongoose.Types.ObjectId(userId) }).exec() as (ICard & { _id: mongoose.Types.ObjectId })[];
+
+    // Calculate total analytics
+    const totalAnalytics = {
+      totalCards: cards.length,
+      activeCards: 0,
+      usedCards: 0,
+      totalSpent: 0,
+      totalOutstanding: 0,
+      merchantTransactions: new Map<string, { count: number; total: number }>(),
+      monthlySpending: new Map<string, number>(),
+      cardDetails: [] as Array<{
+        cardId: string;
+        cardNumber: string;
+        cardHolderName: string;
+        currentBalance: number;
+        maxLimit: number;
+        isActive: boolean;
+        isUsed: boolean;
+        totalTransactions: number;
+        totalSpent: number;
+        lastTransactionDate: Date | null;
+        topMerchants: Array<{
+          merchantId: string;
+          count: number;
+          total: number;
+        }>;
+      }>
+    };
+
+    // Process each card
+    for (const card of cards) {
+      const cardAnalytics = {
+        cardId: card._id.toString(),
+        cardNumber: card.cardNumber,
+        cardHolderName: card.cardHolderName,
+        currentBalance: card.currentBalance,
+        maxLimit: card.maxLimit,
+        isActive: card.isActive,
+        isUsed: card.isUsed,
+        totalTransactions: card.transactions.length,
+        totalSpent: 0,
+        lastTransactionDate: null as Date | null,
+        topMerchants: [] as Array<{
+          merchantId: string;
+          count: number;
+          total: number;
+        }>
+      };
+
+      const merchantMap = new Map<string, { count: number; total: number }>();
+
+      // Process transactions
+      for (const transaction of card.transactions) {
+        if (transaction.status === 'completed') {
+          // Update card analytics
+          cardAnalytics.totalSpent += transaction.amount;
+          if (!cardAnalytics.lastTransactionDate || transaction.timestamp > cardAnalytics.lastTransactionDate) {
+            cardAnalytics.lastTransactionDate = transaction.timestamp;
+          }
+
+          // Update merchant analytics
+          const merchantId = transaction.merchantId.toString();
+          const merchantData = merchantMap.get(merchantId) || { count: 0, total: 0 };
+          merchantData.count++;
+          merchantData.total += transaction.amount;
+          merchantMap.set(merchantId, merchantData);
+
+          // Update global merchant analytics
+          const globalMerchantData = totalAnalytics.merchantTransactions.get(merchantId) || { count: 0, total: 0 };
+          globalMerchantData.count++;
+          globalMerchantData.total += transaction.amount;
+          totalAnalytics.merchantTransactions.set(merchantId, globalMerchantData);
+
+          // Update monthly spending
+          const monthYear = transaction.timestamp.toISOString().slice(0, 7);
+          totalAnalytics.monthlySpending.set(
+            monthYear,
+            (totalAnalytics.monthlySpending.get(monthYear) || 0) + transaction.amount
+          );
+        }
+      }
+
+      // Update total analytics
+      totalAnalytics.totalSpent += cardAnalytics.totalSpent;
+      if (card.isActive && !card.isUsed) totalAnalytics.activeCards++;
+      if (card.isUsed) totalAnalytics.usedCards++;
+
+      // Convert merchant map to array and sort by total spent
+      cardAnalytics.topMerchants = Array.from(merchantMap.entries())
+        .map(([merchantId, data]) => ({ merchantId, ...data }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5);
+
+      totalAnalytics.cardDetails.push(cardAnalytics);
+    }
+
+    // Get user's outstanding amount
+    const user = await User.findById(userId);
+    if (user) {
+      totalAnalytics.totalOutstanding = user.outstandingAmount || 0;
+    }
+
+    // Convert merchant transactions to array and sort by total spent
+    const merchantAnalytics = Array.from(totalAnalytics.merchantTransactions.entries())
+      .map(([merchantId, data]) => ({ merchantId, ...data }))
+      .sort((a, b) => b.total - a.total);
+
+    // Convert monthly spending to array and sort by date
+    const monthlySpending = Array.from(totalAnalytics.monthlySpending.entries())
+      .map(([month, amount]) => ({ month, amount }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+
+    // Get merchant names
+    const merchantIds = merchantAnalytics.map(m => new mongoose.Types.ObjectId(m.merchantId));
+    const merchants = await User.find({ _id: { $in: merchantIds } }, 'name');
+    const merchantMap = new Map(merchants.map(m => [m._id.toString(), m.name]));
+
+    // Add merchant names to analytics
+    const merchantAnalyticsWithNames = merchantAnalytics.map(merchant => ({
+      ...merchant,
+      merchantName: merchantMap.get(merchant.merchantId) || 'Unknown Merchant'
+    }));
+
+    res.json({
+      overview: {
+        totalCards: totalAnalytics.totalCards,
+        activeCards: totalAnalytics.activeCards,
+        usedCards: totalAnalytics.usedCards,
+        totalSpent: totalAnalytics.totalSpent,
+        totalOutstanding: totalAnalytics.totalOutstanding
+      },
+      spending: {
+        monthly: monthlySpending,
+        byMerchant: merchantAnalyticsWithNames
+      },
+      cards: totalAnalytics.cardDetails.map(card => ({
+        ...card,
+        topMerchants: card.topMerchants.map(merchant => ({
+          ...merchant,
+          merchantName: merchantMap.get(merchant.merchantId) || 'Unknown Merchant'
+        }))
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching user analytics:', error);
+    res.status(500).json({ message: 'Error fetching user analytics' });
   }
 });
 

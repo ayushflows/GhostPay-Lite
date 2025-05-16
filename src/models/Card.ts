@@ -10,6 +10,7 @@ export interface ICard extends Document {
   maxLimit: number;
   currentBalance: number;
   isActive: boolean;
+  isUsed: boolean;  // New field to track if card has been used
   transactions: Array<{
     amount: number;
     merchantId: Types.ObjectId;
@@ -23,6 +24,7 @@ export interface ICard extends Document {
 
 interface ICardModel extends Model<ICard> {
   generateCardDetails(): Promise<{ cardNumber: string; cvv: string; expiryDate: string }>;
+  canIssueNewCard(userId: Types.ObjectId): Promise<boolean>;
 }
 
 const CardSchema: Schema = new Schema({
@@ -37,8 +39,8 @@ const CardSchema: Schema = new Schema({
   },
   type: {
     type: String,
-    default: 'credit',
-    enum: ['credit']
+    default: 'virtual',
+    enum: ['virtual']
   },
   expiryDate: {
     type: String,
@@ -69,7 +71,7 @@ const CardSchema: Schema = new Schema({
   maxLimit: {
     type: Number,
     required: true,
-    default: 10000 // Default max limit of 10,000
+    default: 10000 // Fixed max limit of 10,000
   },
   currentBalance: {
     type: Number,
@@ -79,6 +81,10 @@ const CardSchema: Schema = new Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  isUsed: {
+    type: Boolean,
+    default: false
   },
   transactions: [{
     amount: {
@@ -108,6 +114,16 @@ const CardSchema: Schema = new Schema({
   timestamps: true
 });
 
+// Static method to check if user can issue new card
+CardSchema.statics.canIssueNewCard = async function(userId: Types.ObjectId): Promise<boolean> {
+  const activeCardsCount = await this.countDocuments({
+    userId,
+    isActive: true,
+    isUsed: false
+  });
+  return activeCardsCount < 5;
+};
+
 // Static method to generate card details
 CardSchema.statics.generateCardDetails = async function(): Promise<{ cardNumber: string; cvv: string; expiryDate: string }> {
   const Card = mongoose.model('Card');
@@ -124,9 +140,9 @@ CardSchema.statics.generateCardDetails = async function(): Promise<{ cardNumber:
 
   const cvv = Math.floor(100 + Math.random() * 900).toString();
   
-  // Set expiry date to 3 years from now in MM/YYYY format
+  // Set expiry date to 1 year from now in MM/YYYY format
   const expiryDate = new Date();
-  expiryDate.setFullYear(expiryDate.getFullYear() + 3);
+  expiryDate.setFullYear(expiryDate.getFullYear() + 1);
   const month = String(expiryDate.getMonth() + 1).padStart(2, '0');
   const year = expiryDate.getFullYear();
   
@@ -143,6 +159,12 @@ CardSchema.methods.isExpired = function(): boolean {
   const expiryDate = new Date(parseInt(year), parseInt(month) - 1);
   return expiryDate < new Date();
 };
+
+// Pre-save middleware to ensure maxLimit is fixed
+CardSchema.pre('save', function(next) {
+  this.maxLimit = 10000; // Force maxLimit to be 10000
+  next();
+});
 
 const Card = mongoose.model<ICard, ICardModel>('Card', CardSchema);
 export default Card; 
