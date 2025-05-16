@@ -1,0 +1,17 @@
+{
+  "rules": {
+    "maxFileSize": "1MB",
+    "allowedExtensions": [".ts", ".js", ".json", ".md", ".yaml", ".yml"],
+    "excludedDirs": ["node_modules", "dist", ".git"],
+    "maxLineLength": 100,
+    "requireComments": true,
+    "namingConventions": {
+      "files": "kebab-case",
+      "classes": "PascalCase",
+      "interfaces": "IPascalCase",
+      "functions": "camelCase",
+      "variables": "camelCase",
+      "constants": "UPPER_SNAKE_CASE"
+    }
+  }
+} 
