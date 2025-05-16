@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { authMiddleware, requireRole } from '../middleware/auth';
 import { UserRole } from '../models/User';
 import Card, { ICard } from '../models/Card';
+import User from '../models/User';
 import mongoose from 'mongoose';
 
 const router = express.Router();
@@ -29,9 +30,17 @@ router.post('/', authMiddleware, requireRole([UserRole.MERCHANT]), async (req: R
     }
 
     // Find card by number
-    const cardDoc = await Card.findOne({ cardNumber });
+    const cardDoc = await Card.findOne({ 
+      cardNumber,
+      isActive: true,
+      isUsed: false
+    });
+
     if (!cardDoc) {
-      return res.status(404).json({ message: 'Card not found' });
+      return res.status(404).json({ 
+        message: 'Card not found or invalid',
+        details: 'The card may be expired, used, or inactive'
+      });
     }
 
     // Type assertion after null check
@@ -47,22 +56,16 @@ router.post('/', authMiddleware, requireRole([UserRole.MERCHANT]), async (req: R
       return res.status(400).json({ message: 'Invalid expiry date' });
     }
 
-    if (!card.isActive) {
-      return res.status(400).json({ message: 'Card is not active' });
-    }
-
     // Check if card has expired using the helper method
     if (card.isExpired()) {
       return res.status(400).json({ message: 'Card has expired' });
     }
 
     // Check if amount exceeds max limit
-    if (card.currentBalance + amount > card.maxLimit) {
+    if (amount > card.maxLimit) {
       return res.status(400).json({ 
         message: 'Charge amount exceeds card limit',
-        currentBalance: card.currentBalance,
-        maxLimit: card.maxLimit,
-        remainingLimit: card.maxLimit - card.currentBalance
+        maxLimit: card.maxLimit
       });
     }
 
@@ -75,10 +78,19 @@ router.post('/', authMiddleware, requireRole([UserRole.MERCHANT]), async (req: R
       description
     });
 
-    // Update current balance
-    card.currentBalance += amount;
+    // Update card status
+    card.currentBalance = amount;
+    card.isUsed = true;
+    card.isActive = false;
 
     await cardDoc.save();
+
+    // Update user's outstanding amount
+    const user = await User.findById(card.userId);
+    if (user) {
+      user.outstandingAmount = (user.outstandingAmount || 0) + amount;
+      await user.save();
+    }
 
     res.status(200).json({
       message: 'Charge processed successfully',
@@ -87,7 +99,8 @@ router.post('/', authMiddleware, requireRole([UserRole.MERCHANT]), async (req: R
         status: 'completed',
         timestamp: new Date(),
         description,
-        remainingBalance: card.maxLimit - card.currentBalance
+        cardNumber: card.cardNumber,
+        cardHolderName: card.cardHolderName
       }
     });
   } catch (error) {
