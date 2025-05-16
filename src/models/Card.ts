@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document, Types } from 'mongoose';
+import mongoose, { Schema, Document, Types, Model } from 'mongoose';
 
 export interface ICard extends Document {
   cardNumber: string;
@@ -21,12 +21,15 @@ export interface ICard extends Document {
   updatedAt: Date;
 }
 
+interface ICardModel extends Model<ICard> {
+  generateCardDetails(): Promise<{ cardNumber: string; cvv: string; expiryDate: string }>;
+}
+
 const CardSchema: Schema = new Schema({
   cardNumber: {
     type: String,
     required: true,
-    unique: true,
-    length: 12
+    unique: true
   },
   cardHolderName: {
     type: String,
@@ -56,8 +59,7 @@ const CardSchema: Schema = new Schema({
   },
   cvv: {
     type: String,
-    required: true,
-    length: 3
+    required: true
   },
   userId: {
     type: Schema.Types.ObjectId,
@@ -106,21 +108,34 @@ const CardSchema: Schema = new Schema({
   timestamps: true
 });
 
-// Generate random 12-digit card number and set expiry date
-CardSchema.pre('save', function(this: ICard, next) {
-  if (this.isNew) {
-    this.cardNumber = Math.floor(100000000000 + Math.random() * 900000000000).toString();
-    this.cvv = Math.floor(100 + Math.random() * 900).toString();
-    
-    // Set expiry date to 3 years from now in MM/YYYY format
-    const expiryDate = new Date();
-    expiryDate.setFullYear(expiryDate.getFullYear() + 3);
-    const month = String(expiryDate.getMonth() + 1).padStart(2, '0');
-    const year = expiryDate.getFullYear();
-    this.expiryDate = `${month}/${year}`;
+// Static method to generate card details
+CardSchema.statics.generateCardDetails = async function(): Promise<{ cardNumber: string; cvv: string; expiryDate: string }> {
+  const Card = mongoose.model('Card');
+  let cardNumber = '';
+  let isUnique = false;
+  
+  while (!isUnique) {
+    cardNumber = Math.floor(100000000000 + Math.random() * 900000000000).toString();
+    const existingCard = await Card.findOne({ cardNumber });
+    if (!existingCard) {
+      isUnique = true;
+    }
   }
-  next();
-});
+
+  const cvv = Math.floor(100 + Math.random() * 900).toString();
+  
+  // Set expiry date to 3 years from now in MM/YYYY format
+  const expiryDate = new Date();
+  expiryDate.setFullYear(expiryDate.getFullYear() + 3);
+  const month = String(expiryDate.getMonth() + 1).padStart(2, '0');
+  const year = expiryDate.getFullYear();
+  
+  return {
+    cardNumber,
+    cvv,
+    expiryDate: `${month}/${year}`
+  };
+};
 
 // Helper method to check if card is expired
 CardSchema.methods.isExpired = function(): boolean {
@@ -129,4 +144,5 @@ CardSchema.methods.isExpired = function(): boolean {
   return expiryDate < new Date();
 };
 
-export default mongoose.model<ICard>('Card', CardSchema); 
+const Card = mongoose.model<ICard, ICardModel>('Card', CardSchema);
+export default Card; 

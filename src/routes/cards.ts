@@ -2,17 +2,29 @@ import express, { Request, Response } from 'express';
 import { authMiddleware, requireRole } from '../middleware/auth';
 import { UserRole } from '../models/User';
 import Card from '../models/Card';
+import User from '../models/User';
 
 const router = express.Router();
 
 // Issue new card (only for users)
 router.post('/', authMiddleware, requireRole([UserRole.USER]), async (req: Request, res: Response) => {
   try {
-    const { cardHolderName, maxLimit } = req.body;
+    const { maxLimit } = req.body;
     const userId = req.user?.userId;
 
+    // Find user to get their name
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Generate card details
+    const cardDetails = await Card.generateCardDetails();
+
+    // Create new card with generated details
     const card = new Card({
-      cardHolderName,
+      ...cardDetails,
+      cardHolderName: user.name,
       maxLimit: maxLimit || 10000,
       userId
     });
@@ -34,6 +46,7 @@ router.post('/', authMiddleware, requireRole([UserRole.USER]), async (req: Reque
       }
     });
   } catch (error) {
+    console.error('Error issuing card:', error);
     res.status(500).json({ message: 'Error issuing card' });
   }
 });
