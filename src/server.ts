@@ -16,7 +16,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Basic route
 app.get('/', (req: Request, res: Response) => {
-  res.json({ message: 'Welcome to GhostCard Lite API' });
+  res.json({ message: 'Welcome to GhostPay Lite API' });
 });
 
 // Start server
