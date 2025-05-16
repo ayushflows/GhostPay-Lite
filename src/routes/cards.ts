@@ -18,6 +18,15 @@ router.post('/', authMiddleware, requireRole([UserRole.USER]), async (req: Reque
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // Check number of existing cards for the user
+    const existingCardsCount = await Card.countDocuments({ userId });
+    if (existingCardsCount >= 5) {
+      return res.status(400).json({ 
+        message: 'Maximum card limit reached',
+        details: 'You can only have a maximum of 5 cards'
+      });
+    }
+
     // Generate card details
     const cardDetails = await Card.generateCardDetails();
 
@@ -43,7 +52,8 @@ router.post('/', authMiddleware, requireRole([UserRole.USER]), async (req: Reque
         maxLimit: card.maxLimit,
         currentBalance: card.currentBalance,
         isActive: card.isActive
-      }
+      },
+      cardsRemaining: 5 - (existingCardsCount + 1)
     });
   } catch (error) {
     console.error('Error issuing card:', error);
@@ -68,20 +78,29 @@ router.get('/:id', authMiddleware, requireRole([UserRole.USER, UserRole.ADMIN]),
       return res.status(404).json({ message: 'Card not found' });
     }
 
+    // Prepare card response based on user role
+    const cardResponse = {
+      id: card._id,
+      cardNumber: card.cardNumber,
+      cardHolderName: card.cardHolderName,
+      type: card.type,
+      expiryDate: card.expiryDate,
+      maxLimit: card.maxLimit,
+      currentBalance: card.currentBalance,
+      isActive: card.isActive,
+      transactions: card.transactions
+    };
+
+    // Include CVV only for the card owner (user)
+    if (userRole === UserRole.USER) {
+      Object.assign(cardResponse, { cvv: card.cvv });
+    }
+
     res.json({
-      card: {
-        id: card._id,
-        cardNumber: card.cardNumber,
-        cardHolderName: card.cardHolderName,
-        type: card.type,
-        expiryDate: card.expiryDate,
-        maxLimit: card.maxLimit,
-        currentBalance: card.currentBalance,
-        isActive: card.isActive,
-        transactions: card.transactions
-      }
+      card: cardResponse
     });
   } catch (error) {
+    console.error('Error retrieving card:', error);
     res.status(500).json({ message: 'Error retrieving card' });
   }
 });
