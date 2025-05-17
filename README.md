@@ -235,6 +235,9 @@ Authorization: Bearer <your_jwt_token>
 # Clone repository
 git clone https://github.com/ayushflows/GhostPay-Lite.git
 
+#navigate to the repo
+cd GhostPay-Lite
+
 # Install dependencies
 npm install
 
