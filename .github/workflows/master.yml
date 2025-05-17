@@ -39,6 +39,27 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"  
 
+      - name: Fetch secrets from AWS Secrets Manager (JSON blob)
+        id: fetch-secrets
+        run: |
+          SECRET_STRING=$(aws secretsmanager get-secret-value \
+            --secret-id ${{ secrets.JWT_SECRET_ID }} \
+            --query SecretString \
+            --output text)
+      
+          echo "$SECRET_STRING" > secret.json
+      
+          echo "Parsing secret.json using node..."
+          node -e '
+            const fs = require("fs");
+            const secrets = JSON.parse(fs.readFileSync("secret.json", "utf8"));
+            for (const [key, value] of Object.entries(secrets)) {
+              console.log(`::add-mask::${value}`); // mask secret in logs
+              console.log(`${key}=${value}`);
+              fs.appendFileSync(process.env.GITHUB_ENV, `${key}=${value}\n`);
+            }
+          '
+          
       - name: Deploy to App Runner Image
         id: deploy-apprunner
         uses: awslabs/amazon-app-runner-deploy@main
@@ -53,8 +74,14 @@ jobs:
           # The new way to control service stability timeout
           wait-for-service-stability-seconds: 1200
 
-      - name: Create .env file from GitHub secret
-        run: echo "${{ secrets.ENV }}" > .env
+      - name: Create .env file from GitHub secret and AWS Secrets Manager
+        run: |
+          # Start with existing GitHub secrets
+          echo "${{ secrets.ENV }}" > .env
+          
+          # Append AWS Secrets Manager values
+          echo "JWT_SECRET=${{ env.JWT_SECRET }}" >> .env
+          echo "MONGODB_URI=${{ env.MONGODB_URI }}" >> .env
 
       - name: Convert .env to JSON object for App Runner
         run: |
