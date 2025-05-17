@@ -2,41 +2,54 @@ name: Build & Deploy to AWS App Runner via ECR
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master" ]                     
 
 permissions:
-  contents: read
-  id-token: write
+  contents: read                             
+  id-token: write  
 
 jobs:
   build-and-push:
+    name: Build & Push Docker Image to ECR
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v2
+      - name: Checkout code
+        uses: actions/checkout@v4       
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.IAM_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.IAM_SECRET_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-      - id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-      - run: |
+          aws-region: ${{ secrets.AWS_REGION }}  
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2     
+
+      - name: Build, tag, and push Docker image
+        run: |
           REPO_URI=${{ steps.login-ecr.outputs.registry }}/cicd-pipeline:latest
           docker build -t $REPO_URI .
-          docker push $REPO_URI
+          docker push $REPO_URI                    
 
   deploy:
+    name: Deploy to AWS App Runner
     needs: build-and-push
     runs-on: ubuntu-latest
+
     steps:
-      - uses: aws-actions/configure-aws-credentials@v2
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.IAM_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.IAM_SECRET_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-      - uses: awslabs/amazon-app-runner-deploy@v1
+          aws-region: ${{ secrets.AWS_REGION }} 
+
+      - name: Deploy to App Runner
+        uses: awslabs/amazon-app-runner-deploy@main
         with:
-          service: cicd-pipeline-service
-          image: ${{ steps.login-ecr.outputs.registry }}/cicd-pipeline:latest
-          access-role-arn: arn:aws:iam::<aws_account_id>:role/<AppRunnerECRAccessRole>
-          region: ${{ secrets.AWS_REGION }}
+          service-name: cicd-pipeline-service        
+          source-provider: ECR                       
+          image-identifier: ${{ steps.login-ecr.outputs.registry }}/cicd-pipeline:latest 
