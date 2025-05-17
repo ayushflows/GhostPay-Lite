@@ -3,11 +3,12 @@ import jwt from 'jsonwebtoken';
 import User, { UserRole, IUser } from '../models/User';
 import { generateToken, generateRefreshToken, JwtPayload } from '../utils/jwt';
 import { auth } from '../middleware/auth';
+import { authLimiter } from '../middleware/rateLimiter';
 
 const router = express.Router();
 
 // Register route with role
-router.post('/register/:role', async (req: Request, res: Response) => {
+router.post('/register/:role', authLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password, name } = req.body;
     const role = req.params.role as UserRole;
@@ -65,7 +66,7 @@ router.post('/register/:role', async (req: Request, res: Response) => {
 });
 
 // Login route
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', authLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
@@ -120,7 +121,7 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 // Refresh token route
-router.post('/refresh-token', auth, async (req: Request, res: Response) => {
+router.post('/refresh-token', auth, authLimiter, async (req: Request, res: Response) => {
   try {
     const { refreshToken } = req.body;
     if (!refreshToken) {

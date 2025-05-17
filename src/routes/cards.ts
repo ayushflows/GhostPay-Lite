@@ -4,11 +4,12 @@ import { UserRole } from '../models/User';
 import Card, { ICard } from '../models/Card';
 import User from '../models/User';
 import mongoose from 'mongoose';
+import { cardOperationLimiter, analyticsLimiter } from '../middleware/rateLimiter';
 
 const router = express.Router();
 
 // Issue new card (only for users)
-router.post('/', auth, requireRole([UserRole.USER]), async (req: Request, res: Response) => {
+router.post('/', auth, requireRole([UserRole.USER]), cardOperationLimiter, async (req: Request, res: Response) => {
   try {
     const userId = req.user?._id;
     if (!userId) {
@@ -62,7 +63,7 @@ router.post('/', auth, requireRole([UserRole.USER]), async (req: Request, res: R
 });
 
 // Get card status (for users and admins)
-router.get('/:id', auth, requireRole([UserRole.USER, UserRole.ADMIN]), async (req: Request, res: Response) => {
+router.get('/:id', auth, requireRole([UserRole.USER, UserRole.ADMIN]), cardOperationLimiter, async (req: Request, res: Response) => {
   try {
     const cardId = req.params.id;
     const userId = req.user?._id;
@@ -107,7 +108,7 @@ router.get('/:id', auth, requireRole([UserRole.USER, UserRole.ADMIN]), async (re
 });
 
 // Get user analytics (only for users)
-router.get('/analytics/overview', auth, requireRole([UserRole.USER]), async (req: Request, res: Response) => {
+router.get('/analytics/overview', auth, requireRole([UserRole.USER]), analyticsLimiter, async (req: Request, res: Response) => {
   try {
     const userId = req.user?._id;
     if (!userId) {

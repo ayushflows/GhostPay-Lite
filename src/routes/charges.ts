@@ -5,11 +5,12 @@ import Card, { ICard } from '../models/Card';
 import User from '../models/User';
 import Transaction from '../models/Transaction';
 import mongoose from 'mongoose';
+import { chargeOperationLimiter } from '../middleware/rateLimiter';
 
 const router = express.Router();
 
 // Process card charge (only for merchants)
-router.post('/', auth, requireRole([UserRole.MERCHANT]), async (req: Request, res: Response) => {
+router.post('/', auth, requireRole([UserRole.MERCHANT]), chargeOperationLimiter, async (req: Request, res: Response) => {
   try {
     const { cardNumber, cvv, expiryDate, amount, description } = req.body;
     const merchantId = req.user?._id;

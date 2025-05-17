@@ -4,8 +4,12 @@ import Transaction from '../models/Transaction';
 import { UserRole } from '../models/User';
 import mongoose from 'mongoose';
 import User from '../models/User';
+import { generalLimiter, analyticsLimiter } from '../middleware/rateLimiter';
 
 const router = express.Router();
+
+// Apply general rate limiter to all routes
+router.use(generalLimiter);
 
 // Get transaction details with role-based access
 router.get('/:transactionId', auth, async (req: Request, res: Response) => {
@@ -57,7 +61,7 @@ router.get('/:transactionId', auth, async (req: Request, res: Response) => {
 });
 
 // Get merchant analytics (for merchants and admins)
-router.get('/analytics/merchant', auth, requireRole([UserRole.MERCHANT, UserRole.ADMIN]), async (req: Request, res: Response) => {
+router.get('/analytics/merchant', auth, requireRole([UserRole.MERCHANT, UserRole.ADMIN]), analyticsLimiter, async (req: Request, res: Response) => {
   try {
     let merchantId: string | mongoose.Types.ObjectId;
     
@@ -223,7 +227,7 @@ router.get('/analytics/merchant', auth, requireRole([UserRole.MERCHANT, UserRole
 });
 
 // Get admin analytics (admin only)
-router.get('/analytics/admin', auth, requireRole([UserRole.ADMIN]), async (req: Request, res: Response) => {
+router.get('/analytics/admin', auth, requireRole([UserRole.ADMIN]), analyticsLimiter, async (req: Request, res: Response) => {
   try {
     // Get all users, merchants, and transactions
     const [users, merchants, transactions] = await Promise.all([
