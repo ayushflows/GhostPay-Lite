@@ -54,7 +54,7 @@ jobs:
           wait-for-service-stability-seconds: 1200
 
       - name: Create .env file from GitHub secret
-        run: echo "${{ secrets.ENV_FILE }}" > .env
+        run: echo "${{ secrets.ENV }}" > .env
 
       - name: Convert .env to valid JSON array for App Runner
         run: |
