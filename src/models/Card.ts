@@ -12,6 +12,7 @@ export interface ICard extends Document {
   isActive: boolean;
   isUsed: boolean;  // New field to track if card has been used
   transactions: Array<{
+    transactionId: string;
     amount: number;
     merchantId: Types.ObjectId;
     timestamp: Date;
@@ -87,6 +88,10 @@ const CardSchema: Schema = new Schema({
     default: false
   },
   transactions: [{
+    transactionId: {
+      type: String,
+      required: true
+    },
     amount: {
       type: Number,
       required: true

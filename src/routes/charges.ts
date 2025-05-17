@@ -99,8 +99,9 @@ router.post('/', auth, requireRole([UserRole.MERCHANT]), async (req: Request, re
 
     await transaction.save();
 
-    // Add transaction to card
+    // Add transaction to card with transaction ID
     card.transactions.push({
+      transactionId: transaction.transactionId,
       amount,
       merchantId: new mongoose.Types.ObjectId(merchantId),
       timestamp: new Date(),
@@ -131,7 +132,9 @@ router.post('/', auth, requireRole([UserRole.MERCHANT]), async (req: Request, re
         timestamp: new Date(),
         description,
         cardNumber: card.cardNumber,
-        cardHolderName: card.cardHolderName
+        cardHolderName: card.cardHolderName,
+        merchantName: merchant.name,
+        customerName: customer.name
       }
     });
   } catch (error) {

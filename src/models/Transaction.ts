@@ -24,7 +24,8 @@ const TransactionSchema: Schema = new Schema({
   transactionId: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    index: true
   },
   amount: {
     type: Number,
@@ -34,7 +35,8 @@ const TransactionSchema: Schema = new Schema({
   cardId: {
     type: Schema.Types.ObjectId,
     ref: 'Card',
-    required: true
+    required: true,
+    index: true
   },
   cardNumber: {
     type: String,
@@ -47,7 +49,8 @@ const TransactionSchema: Schema = new Schema({
   merchantId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: true,
+    index: true
   },
   merchantName: {
     type: String,
@@ -56,7 +59,8 @@ const TransactionSchema: Schema = new Schema({
   customerId: {
     type: Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: true,
+    index: true
   },
   customerName: {
     type: String,
@@ -66,7 +70,8 @@ const TransactionSchema: Schema = new Schema({
     type: String,
     enum: ['pending', 'completed', 'failed'],
     default: 'pending',
-    required: true
+    required: true,
+    index: true
   },
   description: {
     type: String,
@@ -74,7 +79,8 @@ const TransactionSchema: Schema = new Schema({
   },
   timestamp: {
     type: Date,
-    default: Date.now
+    default: Date.now,
+    index: true
   },
   metadata: {
     ipAddress: String,
@@ -94,13 +100,5 @@ TransactionSchema.pre('save', async function(next) {
   }
   next();
 });
-
-// Indexes for better query performance
-TransactionSchema.index({ transactionId: 1 });
-TransactionSchema.index({ cardId: 1 });
-TransactionSchema.index({ merchantId: 1 });
-TransactionSchema.index({ customerId: 1 });
-TransactionSchema.index({ timestamp: -1 });
-TransactionSchema.index({ status: 1 });
 
 export default mongoose.model<ITransaction>('Transaction', TransactionSchema); 

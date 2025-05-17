@@ -142,6 +142,13 @@ router.get('/analytics/overview', auth, requireRole([UserRole.USER]), async (req
           count: number;
           total: number;
         }>;
+        transactions: Array<{
+          id: string;
+          amount: number;
+          timestamp: Date;
+          status: string;
+          description: string;
+        }>;
       }>
     };
 
@@ -162,6 +169,13 @@ router.get('/analytics/overview', auth, requireRole([UserRole.USER]), async (req
           merchantId: string;
           count: number;
           total: number;
+        }>,
+        transactions: [] as Array<{
+          id: string;
+          amount: number;
+          timestamp: Date;
+          status: string;
+          description: string;
         }>
       };
 
@@ -195,6 +209,15 @@ router.get('/analytics/overview', auth, requireRole([UserRole.USER]), async (req
             monthYear,
             (totalAnalytics.monthlySpending.get(monthYear) || 0) + transaction.amount
           );
+
+          // Add transaction to card analytics
+          cardAnalytics.transactions.push({
+            id: transaction.transactionId,
+            amount: transaction.amount,
+            timestamp: transaction.timestamp,
+            status: transaction.status,
+            description: transaction.description
+          });
         }
       }
 
@@ -208,6 +231,15 @@ router.get('/analytics/overview', auth, requireRole([UserRole.USER]), async (req
         .map(([merchantId, data]) => ({ merchantId, ...data }))
         .sort((a, b) => b.total - a.total)
         .slice(0, 5);
+
+      // Add transaction IDs to card analytics
+      cardAnalytics.transactions = card.transactions.map(t => ({
+        id: t.transactionId,
+        amount: t.amount,
+        timestamp: t.timestamp,
+        status: t.status,
+        description: t.description
+      }));
 
       totalAnalytics.cardDetails.push(cardAnalytics);
     }
