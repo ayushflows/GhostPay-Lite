@@ -1,18 +1,19 @@
-import express from 'express';
-import { auth } from '../middleware/auth';
+import express, { Request, Response } from 'express';
+import { auth, requireRole } from '../middleware/auth';
 import Transaction from '../models/Transaction';
 import { UserRole } from '../models/User';
+import mongoose from 'mongoose';
 
 const router = express.Router();
 
 // Get transaction details with role-based access
-router.get('/:transactionId', auth, async (req, res) => {
+router.get('/:transactionId', auth, async (req: Request, res: Response) => {
   try {
     if (!req.user?._id) {
       return res.status(401).json({ message: 'User not authenticated' });
     }
 
-    const transaction = await Transaction.findById(req.params.transactionId);
+    const transaction = await Transaction.findOne({ transactionId: req.params.transactionId });
 
     if (!transaction) {
       return res.status(404).json({ message: 'Transaction not found' });
@@ -31,18 +32,18 @@ router.get('/:transactionId', auth, async (req, res) => {
     let populatedTransaction;
     if (isAdmin) {
       // Admin gets full details
-      populatedTransaction = await Transaction.findById(req.params.transactionId)
+      populatedTransaction = await Transaction.findOne({ transactionId: req.params.transactionId })
         .populate('cardId', 'cardNumber cardHolderName')
         .populate('merchantId', 'name email')
         .populate('customerId', 'name email');
     } else if (isMerchant) {
       // Merchant gets customer details but not card details
-      populatedTransaction = await Transaction.findById(req.params.transactionId)
+      populatedTransaction = await Transaction.findOne({ transactionId: req.params.transactionId })
         .populate('customerId', 'name email')
         .select('-cardId');
     } else {
       // Customer gets merchant details but not card details
-      populatedTransaction = await Transaction.findById(req.params.transactionId)
+      populatedTransaction = await Transaction.findOne({ transactionId: req.params.transactionId })
         .populate('merchantId', 'name email')
         .select('-cardId');
     }
@@ -53,5 +54,6 @@ router.get('/:transactionId', auth, async (req, res) => {
     res.status(500).json({ message: 'Error fetching transaction details' });
   }
 });
+
 
 export default router; 

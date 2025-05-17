@@ -6,6 +6,7 @@ import authRoutes from './routes/auth';
 import cardRoutes from './routes/cards';
 import chargeRoutes from './routes/charges';
 import connectDB from './config/database';
+import transactionRoutes from './routes/transaction';
 
 // Load environment variables
 dotenv.config();
@@ -25,6 +26,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/auth', authRoutes);
 app.use('/cards', cardRoutes);
 app.use('/charges', chargeRoutes);
+app.use('/transactions', transactionRoutes);
 
 // Basic route
 app.get('/', (req: Request, res: Response) => {
