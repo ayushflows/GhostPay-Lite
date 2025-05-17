@@ -38,10 +38,6 @@ jobs:
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"  
-          
-      # - name: Set image uri output
-      #   run: echo "image_uri=${{ steps.login-ecr.outputs.registry }}/cicd-pipeline:latest" >> $GITHUB_OUTPUT
-      #   id: set-image
 
       - name: Deploy to App Runner Image
         id: deploy-apprunner
@@ -57,42 +53,56 @@ jobs:
           # The new way to control service stability timeout
           wait-for-service-stability-seconds: 1200
 
-      - name: Create .env file from secret
-        run: echo "${{ secrets.ENV }}" > .env
+      - name: Create .env file from GitHub secret
+        run: echo "${{ secrets.ENV_FILE }}" > .env
 
-      - name: Convert .env to App Runner JSON format
+      - name: Convert .env to valid JSON array for App Runner
         run: |
-          echo '[' > env-vars.json
-          sed -E 's/^([^=]+)=(.*)$/{"Key":"\1","Value":"\2"},/' .env >> env-vars.json
+          echo "[" > env-vars.json
+          while IFS='=' read -r key value; do
+            if [[ -z "$key" || "$key" == \#* ]]; then continue; fi
+            esc_key=$(echo "$key" | sed 's/"/\\"/g')
+            esc_value=$(echo "$value" | sed 's/"/\\"/g')
+            echo "{\"Key\":\"$esc_key\",\"Value\":\"$esc_value\"}," >> env-vars.json
+          done < .env
           sed -i '$ s/,$//' env-vars.json
-          echo ']' >> env-vars.json
+          echo "]" >> env-vars.json
 
-      - name: Prepare App Runner update-service payload
+      - name: ✅ DEBUG: Print env-vars.json
         run: |
-          cat <<EOF > update.json
-          {
-            "ServiceArn": "${{ secrets.APP_RUNNER_SERVICE_ARN }}",
-            "SourceConfiguration": {
-              "ImageRepository": {
-                "ImageIdentifier": "${{ steps.build-image.outputs.image }}",
-                "ImageRepositoryType": "ECR"
-              },
-              "ImageConfiguration": {
-                "RuntimeEnvironmentVariables": $(cat env-vars.json)
-              },
-              "AutoDeploymentsEnabled": true
+          echo "==== env-vars.json ===="
+          cat env-vars.json
+          echo "========================"
+
+      - name: Create App Runner update-service JSON file
+        run: |
+            cat <<EOF > update.json
+            {
+              "ServiceArn": "${{ secrets.APP_RUNNER_SERVICE_ARN }}",
+              "SourceConfiguration": {
+                "ImageRepository": {
+                  "ImageIdentifier": "${{ steps.build-image.outputs.image }}",
+                  "ImageRepositoryType": "ECR"
+                },
+                "ImageConfiguration": {
+                  "RuntimeEnvironmentVariables": $(cat env-vars.json)
+                },
+                "AutoDeploymentsEnabled": true
+              }
             }
-          }
-          EOF
+            EOF
+
+      - name: ✅ DEBUG: Print update.json
+        run: |
+          echo "==== update.json ===="
+          cat update.json
+          echo "======================"
 
       - name: Update App Runner service with environment variables
         run: |
           aws apprunner update-service \
             --cli-input-json file://update.json \
             --region ${{ secrets.AWS_REGION }}
-
-      - name: Done
-        run: echo "Deployment complete 🎉"
 
       - name: App Runner URL
         run: echo "App runner URL ${{ steps.deploy-apprunner.outputs.service-url }}" 
