@@ -2,11 +2,11 @@ name: Build & Deploy to AWS App Runner via ECR
 
 on:
   push:
-    branches: [ "master" ]                     # 1. Trigger on master pushes :contentReference[oaicite:10]{index=10}
+    branches: [ "master" ]                     
 
 permissions:
-  contents: read                              # Allows checkout
-  id-token: write                             # Required if using OIDC (optional)
+  contents: read                             
+  id-token: write  
 
 jobs:
   build-and-push:
@@ -48,7 +48,7 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }} 
 
       - name: Deploy to App Runner
-        uses: awslabs/amazon-app-runner-deploy@v2   
+        uses: awslabs/amazon-app-runner-deploy@2.5.2   
         with:
           service-name: cicd-pipeline-service        
           source-provider: ECR                       
