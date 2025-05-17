@@ -57,5 +57,42 @@ jobs:
           # The new way to control service stability timeout
           wait-for-service-stability-seconds: 1200
 
+      - name: Create .env file from secret
+        run: echo "${{ secrets.ENV }}" > .env
+
+      - name: Convert .env to App Runner JSON format
+        run: |
+          echo '[' > env-vars.json
+          sed -E 's/^([^=]+)=(.*)$/{"Key":"\1","Value":"\2"},/' .env >> env-vars.json
+          sed -i '$ s/,$//' env-vars.json
+          echo ']' >> env-vars.json
+
+      - name: Prepare App Runner update-service payload
+        run: |
+          cat <<EOF > update.json
+          {
+            "ServiceArn": "${{ secrets.APP_RUNNER_SERVICE_ARN }}",
+            "SourceConfiguration": {
+              "ImageRepository": {
+                "ImageIdentifier": "${{ steps.build-image.outputs.image }}",
+                "ImageRepositoryType": "ECR"
+              },
+              "ImageConfiguration": {
+                "RuntimeEnvironmentVariables": $(cat env-vars.json)
+              },
+              "AutoDeploymentsEnabled": true
+            }
+          }
+          EOF
+
+      - name: Update App Runner service with environment variables
+        run: |
+          aws apprunner update-service \
+            --cli-input-json file://update.json \
+            --region ${{ secrets.AWS_REGION }}
+
+      - name: Done
+        run: echo "Deployment complete 🎉"
+
       - name: App Runner URL
         run: echo "App runner URL ${{ steps.deploy-apprunner.outputs.service-url }}" 
