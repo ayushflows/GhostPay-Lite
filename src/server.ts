@@ -28,7 +28,7 @@ app.use('/charges', chargeRoutes);
 
 // Basic route
 app.get('/', (req: Request, res: Response) => {
-  res.json({ message: 'Welcome to GhostPay Lite API' });
+  res.json({ message: 'Welcome to GhostPay Lite API backend' });
 });
 
 // Error handling middleware
