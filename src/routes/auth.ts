@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import User, { UserRole, IUser } from '../models/User';
 import { generateToken, generateRefreshToken, JwtPayload } from '../utils/jwt';
-import { authMiddleware, requireRole } from '../middleware/auth';
+import { auth } from '../middleware/auth';
 
 const router = express.Router();
 
@@ -36,12 +36,14 @@ router.post('/register/:role', async (req: Request, res: Response) => {
     // Generate tokens
     const token = generateToken({
       userId: savedUser._id.toString(),
+      _id: savedUser._id.toString(),
       email: savedUser.email,
       role: savedUser.role
     });
 
     const refreshToken = generateRefreshToken({
       userId: savedUser._id.toString(),
+      _id: savedUser._id.toString(),
       email: savedUser.email,
       role: savedUser.role
     });
@@ -89,12 +91,14 @@ router.post('/login', async (req: Request, res: Response) => {
     // Generate tokens
     const token = generateToken({
       userId: updatedUser._id.toString(),
+      _id: updatedUser._id.toString(),
       email: updatedUser.email,
       role: updatedUser.role
     });
 
     const refreshToken = generateRefreshToken({
       userId: updatedUser._id.toString(),
+      _id: updatedUser._id.toString(),
       email: updatedUser.email,
       role: updatedUser.role
     });
@@ -116,7 +120,7 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 // Refresh token route
-router.post('/refresh-token', authMiddleware, async (req: Request, res: Response) => {
+router.post('/refresh-token', auth, async (req: Request, res: Response) => {
   try {
     const { refreshToken } = req.body;
     if (!refreshToken) {
@@ -126,6 +130,7 @@ router.post('/refresh-token', authMiddleware, async (req: Request, res: Response
     const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET || 'your-secret-key') as JwtPayload;
     const newToken = generateToken({
       userId: decoded.userId,
+      _id: decoded.userId,
       email: decoded.email,
       role: decoded.role
     });

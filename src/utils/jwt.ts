@@ -1,16 +1,18 @@
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { UserRole } from '../models/User';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+// Use a consistent secret key
+const JWT_SECRET = process.env.JWT_SECRET || 'ghostcard-secret-key-2024';
 
 export interface JwtPayload {
   userId: string;
+  _id: string;
   email: string;
   role: UserRole;
 }
 
 export const generateToken = (payload: JwtPayload): string => {
-  const options: SignOptions = { expiresIn: '7d' as const };
+  const options: SignOptions = { expiresIn: '1h' };
   return jwt.sign(payload, JWT_SECRET, options);
 };
 
@@ -23,6 +25,6 @@ export const verifyToken = (token: string): JwtPayload => {
 };
 
 export const generateRefreshToken = (payload: JwtPayload): string => {
-  const options: SignOptions = { expiresIn: '30d' as const };
+  const options: SignOptions = { expiresIn: '7d' };
   return jwt.sign(payload, JWT_SECRET, options);
 }; 

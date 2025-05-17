@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { authMiddleware, requireRole } from '../middleware/auth';
+import { auth, requireRole } from '../middleware/auth';
 import { UserRole } from '../models/User';
 import Card, { ICard } from '../models/Card';
 import User from '../models/User';
@@ -8,10 +8,10 @@ import mongoose from 'mongoose';
 const router = express.Router();
 
 // Process card charge (only for merchants)
-router.post('/', authMiddleware, requireRole([UserRole.MERCHANT]), async (req: Request, res: Response) => {
+router.post('/', auth, requireRole([UserRole.MERCHANT]), async (req: Request, res: Response) => {
   try {
     const { cardNumber, cvv, expiryDate, amount, description } = req.body;
-    const merchantId = req.user?.userId;
+    const merchantId = req.user?._id;
 
     if (!cardNumber || !cvv || !expiryDate || !amount || !description || !merchantId) {
       return res.status(400).json({ 

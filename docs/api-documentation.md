@@ -202,7 +202,7 @@ Creates a new card for the authenticated user.
 **Response (201 Created):**
 ```json
 {
-  "message": "Card issued successfully",
+  "message": "Virtual card issued successfully",
   "card": {
     "id": "string",
     "cardNumber": "string",
@@ -211,7 +211,6 @@ Creates a new card for the authenticated user.
     "expiryDate": "MM/YYYY",
     "cvv": "string",
     "maxLimit": number,
-    "currentBalance": 0,
     "isActive": true
   }
 }
@@ -273,12 +272,13 @@ Retrieves the status and details of a specific card.
     "maxLimit": number,
     "currentBalance": number,
     "isActive": boolean,
+    "isUsed": boolean,
     "transactions": [
       {
         "amount": number,
         "merchantId": "string",
         "timestamp": "ISO date string",
-        "status": "completed" | "pending" | "failed",
+        "status": "completed",
         "description": "string"
       }
     ]
@@ -306,7 +306,104 @@ Retrieves the status and details of a specific card.
   }
   ```
 
-### 3. Process Card Charge
+### 3. Get Card Analytics
+Get comprehensive analytics for user's cards.
+
+**Endpoint:** `GET /cards/analytics/overview`
+
+**Required Role:** USER
+
+**Response (200 OK):**
+```json
+{
+  "overview": {
+    "totalCards": number,
+    "activeCards": number,
+    "usedCards": number,
+    "totalSpent": number,
+    "totalOutstanding": number
+  },
+  "spending": {
+    "monthly": [
+      {
+        "month": "YYYY-MM",
+        "amount": number
+      }
+    ],
+    "byMerchant": [
+      {
+        "merchantId": "string",
+        "merchantName": "string",
+        "count": number,
+        "total": number
+      }
+    ]
+  },
+  "cards": [
+    {
+      "cardId": "string",
+      "cardNumber": "string",
+      "cardHolderName": "string",
+      "currentBalance": number,
+      "maxLimit": number,
+      "isActive": boolean,
+      "isUsed": boolean,
+      "totalTransactions": number,
+      "totalSpent": number,
+      "lastTransactionDate": "ISO date string",
+      "topMerchants": [
+        {
+          "merchantId": "string",
+          "merchantName": "string",
+          "count": number,
+          "total": number
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Transaction Routes
+
+### 1. Get Transaction Details
+Get detailed information about a specific transaction.
+
+**Endpoint:** `GET /transactions/:transactionId`
+
+**Required Role:** ADMIN, MERCHANT, or USER
+- Admins get full transaction details including card information
+- Merchants get transaction details with customer info but no card details
+- Customers get transaction details with merchant info but no card details
+
+**Response (200 OK):**
+```json
+{
+  "transaction": {
+    "id": "string",
+    "amount": number,
+    "status": "completed",
+    "timestamp": "ISO date string",
+    "description": "string",
+    "cardId": {
+      "cardNumber": "string",
+      "cardHolderName": "string"
+    },
+    "merchantId": {
+      "name": "string",
+      "email": "string"
+    },
+    "customerId": {
+      "name": "string",
+      "email": "string"
+    }
+  }
+}
+```
+
+## Charge Processing Routes
+
+### 1. Process Card Charge
 Processes a charge on a card (Merchant only).
 
 **Endpoint:** `POST /charges`
@@ -340,7 +437,8 @@ Processes a charge on a card (Merchant only).
     "status": "completed",
     "timestamp": "ISO date string",
     "description": "string",
-    "remainingBalance": number
+    "cardNumber": "string",
+    "cardHolderName": "string"
   }
 }
 ```
@@ -414,9 +512,9 @@ Processes a charge on a card (Merchant only).
 
 ## Security Notes
 1. All passwords are hashed using bcrypt
-2. JWT tokens expire after 7 days
-3. Refresh tokens expire after 30 days
-4. Failed login attempts are tracked and rate-limited
+2. JWT tokens expire after 1 hour
+3. Refresh tokens expire after 7 days
+4. Failed login attempts are tracked
 5. All sensitive data is encrypted in transit
 6. Card details are validated before processing
 7. Role-based access control is enforced
@@ -429,4 +527,221 @@ Processes a charge on a card (Merchant only).
 4. Keep audit logs of all operations
 5. Regularly rotate secrets and keys
 6. Implement proper input validation
-7. Use rate limiting to prevent abuse 
+7. Use rate limiting to prevent abuse
+
+## Merchant Analytics Routes
+
+### 1. Get Merchant Dashboard
+Get comprehensive analytics for a merchant.
+
+**Endpoint:** `GET /merchant/analytics`
+
+**Required Role:** MERCHANT
+
+**Query Parameters:**
+| Parameter | Type   | Description                    | Required |
+|-----------|--------|--------------------------------|----------|
+| startDate | string | Start date (YYYY-MM-DD)        | No       |
+| endDate   | string | End date (YYYY-MM-DD)          | No       |
+| period    | string | Period (daily/weekly/monthly)  | No       |
+
+**Response (200 OK):**
+```json
+{
+  "summary": {
+    "totalTransactions": number,
+    "totalAmount": number,
+    "averageTransactionValue": number,
+    "uniqueCustomers": number,
+    "successRate": number
+  },
+  "timeBasedAnalytics": {
+    "period": "daily" | "weekly" | "monthly",
+    "data": [
+      {
+        "period": "string",
+        "transactionCount": number,
+        "totalAmount": number,
+        "uniqueCustomers": number
+      }
+    ]
+  },
+  "recentTransactions": [
+    {
+      "transactionId": "string",
+      "amount": number,
+      "customerId": "string",
+      "timestamp": "ISO date string",
+      "status": "completed" | "failed",
+      "description": "string"
+    }
+  ],
+  "customerMetrics": {
+    "newCustomers": number,
+    "returningCustomers": number,
+    "averageCustomerValue": number
+  }
+}
+```
+
+**Error Responses:**
+- 401 Unauthorized
+  ```json
+  {
+    "message": "Invalid or missing token"
+  }
+  ```
+- 403 Forbidden
+  ```json
+  {
+    "message": "Only merchants can access analytics"
+  }
+  ```
+- 400 Bad Request
+  ```json
+  {
+    "message": "Invalid date format",
+    "expectedFormat": "YYYY-MM-DD"
+  }
+  ```
+  ```json
+  {
+    "message": "Invalid period. Must be daily, weekly, or monthly"
+  }
+  ```
+
+### 2. Get Transaction History
+Get detailed transaction history for a merchant.
+
+**Endpoint:** `GET /merchant/transactions`
+
+**Required Role:** MERCHANT
+
+**Query Parameters:**
+| Parameter | Type   | Description                    | Required |
+|-----------|--------|--------------------------------|----------|
+| page      | number | Page number (default: 1)       | No       |
+| limit     | number | Items per page (default: 20)   | No       |
+| startDate | string | Start date (YYYY-MM-DD)        | No       |
+| endDate   | string | End date (YYYY-MM-DD)          | No       |
+| status    | string | Filter by status               | No       |
+
+**Response (200 OK):**
+```json
+{
+  "transactions": [
+    {
+      "transactionId": "string",
+      "amount": number,
+      "customerId": "string",
+      "customerName": "string",
+      "timestamp": "ISO date string",
+      "status": "completed" | "failed",
+      "description": "string"
+    }
+  ],
+  "pagination": {
+    "total": number,
+    "page": number,
+    "limit": number,
+    "totalPages": number
+  },
+  "summary": {
+    "totalAmount": number,
+    "successfulTransactions": number,
+    "failedTransactions": number
+  }
+}
+```
+
+**Error Responses:**
+- 401 Unauthorized
+  ```json
+  {
+    "message": "Invalid or missing token"
+  }
+  ```
+- 403 Forbidden
+  ```json
+  {
+    "message": "Only merchants can access transactions"
+  }
+  ```
+- 400 Bad Request
+  ```json
+  {
+    "message": "Invalid page number"
+  }
+  ```
+  ```json
+  {
+    "message": "Invalid limit value"
+  }
+  ```
+
+### 3. Get Customer Analytics
+Get analytics about customers who have made transactions.
+
+**Endpoint:** `GET /merchant/customers/analytics`
+
+**Required Role:** MERCHANT
+
+**Query Parameters:**
+| Parameter | Type   | Description                    | Required |
+|-----------|--------|--------------------------------|----------|
+| startDate | string | Start date (YYYY-MM-DD)        | No       |
+| endDate   | string | End date (YYYY-MM-DD)          | No       |
+
+**Response (200 OK):**
+```json
+{
+  "customerMetrics": {
+    "totalCustomers": number,
+    "activeCustomers": number,
+    "newCustomers": number,
+    "returningCustomers": number
+  },
+  "customerSegments": [
+    {
+      "segment": "string",
+      "count": number,
+      "totalSpent": number,
+      "averageSpent": number
+    }
+  ],
+  "topCustomers": [
+    {
+      "customerId": "string",
+      "customerName": "string",
+      "totalSpent": number,
+      "transactionCount": number,
+      "lastTransactionDate": "ISO date string"
+    }
+  ],
+  "customerRetention": {
+    "retentionRate": number,
+    "churnRate": number,
+    "averageLifetime": number
+  }
+}
+```
+
+**Error Responses:**
+- 401 Unauthorized
+  ```json
+  {
+    "message": "Invalid or missing token"
+  }
+  ```
+- 403 Forbidden
+  ```json
+  {
+    "message": "Only merchants can access customer analytics"
+  }
+  ```
+- 400 Bad Request
+  ```json
+  {
+    "message": "Invalid date range"
+  }
+  ``` 
