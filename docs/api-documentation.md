@@ -125,7 +125,8 @@ Authenticate a user and receive access and refresh tokens.
 - 429 Too Many Requests
   ```json
   {
-    "message": "Too many login attempts. Please try again later"
+    "message": "Too many login attempts, please try again after an hour",
+    "retryAfter": "number"
   }
   ```
 - 500 Internal Server Error
@@ -438,7 +439,9 @@ Processes a charge on a card (Merchant only).
     "timestamp": "ISO date string",
     "description": "string",
     "cardNumber": "string",
-    "cardHolderName": "string"
+    "cardHolderName": "string",
+    "merchantName": "string",
+    "customerName": "string"
   }
 }
 ```
@@ -447,12 +450,8 @@ Processes a charge on a card (Merchant only).
 - 400 Bad Request
   ```json
   {
-    "message": "Invalid card number format"
-  }
-  ```
-  ```json
-  {
-    "message": "Invalid CVV format"
+    "message": "Missing required fields",
+    "required": ["cardNumber", "cvv", "expiryDate", "amount", "description"]
   }
   ```
   ```json
@@ -463,52 +462,352 @@ Processes a charge on a card (Merchant only).
   ```
   ```json
   {
+    "message": "Invalid CVV"
+  }
+  ```
+  ```json
+  {
+    "message": "Invalid expiry date"
+  }
+  ```
+  ```json
+  {
     "message": "Card has expired"
   }
   ```
   ```json
   {
     "message": "Charge amount exceeds card limit",
-    "currentBalance": number,
-    "maxLimit": number,
-    "remainingLimit": number
-  }
-  ```
-  ```json
-  {
-    "message": "Card is not active"
+    "maxLimit": number
   }
   ```
 - 401 Unauthorized
   ```json
   {
-    "message": "Invalid or missing token"
-  }
-  ```
-- 403 Forbidden
-  ```json
-  {
-    "message": "Only merchants can process charges"
+    "message": "User not authenticated"
   }
   ```
 - 404 Not Found
   ```json
   {
-    "message": "Card not found"
+    "message": "Card not found or invalid",
+    "details": "The card may be expired, used, or inactive"
+  }
+  ```
+  ```json
+  {
+    "message": "User not found"
   }
   ```
 - 429 Too Many Requests
   ```json
   {
-    "message": "Rate limit exceeded. Please try again later"
+    "message": "Too many charge operations, please try again after an hour",
+    "retryAfter": "number"
+  }
+  ```
+- 500 Internal Server Error
+  ```json
+  {
+    "message": "Error processing charge"
+  }
+  ```
+
+## Transaction Routes
+
+### 1. Get Transaction Details
+Get detailed information about a specific transaction.
+
+**Endpoint:** `GET /transactions/:transactionId`
+
+**Required Role:** ADMIN, MERCHANT, or USER
+
+**Response (200 OK):**
+```json
+{
+  "transaction": {
+    "id": "string",
+    "amount": number,
+    "status": "completed",
+    "timestamp": "ISO date string",
+    "description": "string",
+    "cardId": {
+      "cardNumber": "string",
+      "cardHolderName": "string"
+    },
+    "merchantId": {
+      "name": "string",
+      "email": "string"
+    },
+    "customerId": {
+      "name": "string",
+      "email": "string"
+    }
+  }
+}
+```
+
+**Error Responses:**
+- 401 Unauthorized
+  ```json
+  {
+    "message": "User not authenticated"
+  }
+  ```
+- 403 Forbidden
+  ```json
+  {
+    "message": "Access denied to this transaction"
+  }
+  ```
+- 404 Not Found
+  ```json
+  {
+    "message": "Transaction not found"
+  }
+  ```
+- 429 Too Many Requests
+  ```json
+  {
+    "message": "Too many requests from this IP, please try again after 15 minutes",
+    "retryAfter": "number"
+  }
+  ```
+- 500 Internal Server Error
+  ```json
+  {
+    "message": "Error fetching transaction details"
+  }
+  ```
+
+### 2. Get Merchant Analytics
+Get comprehensive analytics for a merchant.
+
+**Endpoint:** `GET /transactions/analytics/merchant`
+
+**Required Role:** MERCHANT or ADMIN
+
+**Query Parameters:**
+| Parameter | Type   | Description                    | Required |
+|-----------|--------|--------------------------------|----------|
+| merchantId | string | Merchant ID (admin only)       | No       |
+
+**Response (200 OK):**
+```json
+{
+  "merchant": {
+    "id": "string",
+    "name": "string",
+    "email": "string"
+  },
+  "overview": {
+    "totalTransactions": number,
+    "totalAmount": number,
+    "averageAmount": number,
+    "successRate": number,
+    "totalCustomers": number
+  },
+  "timeAnalysis": {
+    "daily": [
+      {
+        "date": "YYYY-MM-DD",
+        "amount": number
+      }
+    ],
+    "monthly": [
+      {
+        "month": "YYYY-MM",
+        "amount": number
+      }
+    ],
+    "yearly": [
+      {
+        "year": "YYYY",
+        "amount": number
+      }
+    ]
+  },
+  "customerAnalysis": [
+    {
+      "customerId": "string",
+      "customerName": "string",
+      "totalTransactions": number,
+      "totalAmount": number,
+      "lastTransaction": "ISO date string",
+      "transactions": [
+        {
+          "id": "string",
+          "amount": number,
+          "timestamp": "ISO date string",
+          "status": "string",
+          "description": "string"
+        }
+      ]
+    }
+  ],
+  "statusBreakdown": {
+    "completed": number,
+    "failed": number,
+    "pending": number
+  },
+  "recentTransactions": [
+    {
+      "id": "string",
+      "amount": number,
+      "timestamp": "ISO date string",
+      "status": "string",
+      "description": "string",
+      "customerName": "string"
+    }
+  ]
+}
+```
+
+**Error Responses:**
+- 400 Bad Request
+  ```json
+  {
+    "message": "Valid merchant ID required for admin"
+  }
+  ```
+- 401 Unauthorized
+  ```json
+  {
+    "message": "User not authenticated"
+  }
+  ```
+- 404 Not Found
+  ```json
+  {
+    "message": "Merchant not found"
+  }
+  ```
+- 429 Too Many Requests
+  ```json
+  {
+    "message": "Too many analytics requests, please try again after 5 minutes",
+    "retryAfter": "number"
+  }
+  ```
+- 500 Internal Server Error
+  ```json
+  {
+    "message": "Error fetching merchant analytics"
+  }
+  ```
+
+### 3. Get Admin Analytics
+Get comprehensive analytics for the entire system.
+
+**Endpoint:** `GET /transactions/analytics/admin`
+
+**Required Role:** ADMIN
+
+**Response (200 OK):**
+```json
+{
+  "overview": {
+    "totalUsers": number,
+    "totalMerchants": number,
+    "totalTransactions": number,
+    "totalAmount": number,
+    "averageAmount": number,
+    "successRate": number,
+    "totalOutstanding": number
+  },
+  "userAnalysis": {
+    "totalActiveUsers": number,
+    "totalInactiveUsers": number,
+    "usersWithCards": number,
+    "usersWithTransactions": number,
+    "userOutstandingAmount": number,
+    "averageOutstandingPerUser": number
+  },
+  "merchantAnalysis": {
+    "totalActiveMerchants": number,
+    "totalInactiveMerchants": number,
+    "merchantsWithTransactions": number,
+    "averageTransactionsPerMerchant": number,
+    "averageAmountPerMerchant": number,
+    "topMerchants": [
+      {
+        "merchantId": "string",
+        "merchantName": "string",
+        "totalTransactions": number,
+        "totalAmount": number,
+        "successRate": number,
+        "uniqueCustomers": number
+      }
+    ]
+  },
+  "transactionAnalysis": {
+    "statusBreakdown": {
+      "completed": number,
+      "failed": number,
+      "pending": number
+    },
+    "timeAnalysis": {
+      "daily": [
+        {
+          "date": "YYYY-MM-DD",
+          "amount": number
+        }
+      ],
+      "monthly": [
+        {
+          "month": "YYYY-MM",
+          "amount": number
+        }
+      ],
+      "yearly": [
+        {
+          "year": "YYYY",
+          "amount": number
+        }
+      ]
+    },
+    "recentTransactions": [
+      {
+        "id": "string",
+        "amount": number,
+        "timestamp": "ISO date string",
+        "status": "string",
+        "description": "string",
+        "merchantName": "string",
+        "customerName": "string"
+      }
+    ]
+  }
+}
+```
+
+**Error Responses:**
+- 401 Unauthorized
+  ```json
+  {
+    "message": "User not authenticated"
+  }
+  ```
+- 429 Too Many Requests
+  ```json
+  {
+    "message": "Too many analytics requests, please try again after 5 minutes",
+    "retryAfter": "number"
+  }
+  ```
+- 500 Internal Server Error
+  ```json
+  {
+    "message": "Error fetching admin analytics"
   }
   ```
 
 ## Rate Limiting
-- Login attempts: 5 per minute per IP
-- Card issuance: 3 cards per user
-- Charges: 100 requests per minute per merchant
-- Status checks: 60 requests per minute per user
+- General API: 100 requests per minute per IP
+- Authentication: 10 requests per minute per IP
+- Card Operations: 50 requests per minute per IP
+- Charge Operations: 100 requests per minute per IP
+- Analytics: 100 requests per minute per IP
 
 ## Security Notes
 1. All passwords are hashed using bcrypt
