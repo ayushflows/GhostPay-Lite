@@ -56,18 +56,19 @@ jobs:
       - name: Create .env file from GitHub secret
         run: echo "${{ secrets.ENV }}" > .env
 
-      - name: Convert .env to valid JSON array for App Runner
+      - name: Convert .env to JSON object for App Runner
         run: |
-          echo "[" > env-vars.json
+          echo "{" > env-vars.json
           while IFS='=' read -r key value; do
-            if [[ -z "$key" || "$key" == \#* ]]; then continue; fi
+            # skip comments and empty lines
+            [[ -z "$key" || "$key" =~ ^# ]] && continue
             esc_key=$(echo "$key" | sed 's/"/\\"/g')
             esc_value=$(echo "$value" | sed 's/"/\\"/g')
-            echo "{\"Key\":\"$esc_key\",\"Value\":\"$esc_value\"}," >> env-vars.json
+            echo "\"$esc_key\": \"$esc_value\"," >> env-vars.json
           done < .env
           sed -i '$ s/,$//' env-vars.json
-          echo "]" >> env-vars.json
-
+          echo "}" >> env-vars.json
+          
       - name: Print env-vars.json
         run: |
           echo "==== env-vars.json ===="
