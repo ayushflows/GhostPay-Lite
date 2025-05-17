@@ -97,7 +97,15 @@ router.post('/', auth, requireRole([UserRole.MERCHANT]), async (req: Request, re
       }
     });
 
-    await transaction.save();
+    try {
+      await transaction.save();
+    } catch (error) {
+      console.error('Error saving transaction:', error);
+      return res.status(500).json({ 
+        message: 'Error processing transaction',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
 
     // Add transaction to card with transaction ID
     card.transactions.push({
@@ -114,13 +122,38 @@ router.post('/', auth, requireRole([UserRole.MERCHANT]), async (req: Request, re
     card.isUsed = true;
     card.isActive = false;
 
-    await cardDoc.save();
+    try {
+      await cardDoc.save();
+    } catch (error) {
+      console.error('Error updating card:', error);
+      // Attempt to rollback transaction
+      await Transaction.findByIdAndDelete(transaction._id);
+      return res.status(500).json({ 
+        message: 'Error updating card',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
 
     // Update user's outstanding amount
     const user = await User.findById(card.userId);
     if (user) {
       user.outstandingAmount = (user.outstandingAmount || 0) + amount;
-      await user.save();
+      try {
+        await user.save();
+      } catch (error) {
+        console.error('Error updating user:', error);
+        // Attempt to rollback transaction and card
+        await Transaction.findByIdAndDelete(transaction._id);
+        card.transactions.pop();
+        card.currentBalance = 0;
+        card.isUsed = false;
+        card.isActive = true;
+        await cardDoc.save();
+        return res.status(500).json({ 
+          message: 'Error updating user balance',
+          details: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
     }
 
     res.status(200).json({

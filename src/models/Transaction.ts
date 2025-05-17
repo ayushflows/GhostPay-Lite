@@ -91,8 +91,8 @@ const TransactionSchema: Schema = new Schema({
   timestamps: true
 });
 
-// Generate unique transaction ID
-TransactionSchema.pre('save', async function(next) {
+// Generate unique transaction ID before validation
+TransactionSchema.pre('validate', function(next) {
   if (!this.transactionId) {
     const timestamp = Date.now().toString();
     const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
