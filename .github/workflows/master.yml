@@ -82,10 +82,10 @@ jobs:
               "SourceConfiguration": {
                 "ImageRepository": {
                   "ImageIdentifier": "${{ steps.build-image.outputs.image }}",
-                  "ImageRepositoryType": "ECR"
-                },
-                "ImageConfiguration": {
-                  "RuntimeEnvironmentVariables": $(cat env-vars.json)
+                  "ImageRepositoryType": "ECR",
+                  "ImageConfiguration": {
+                    "RuntimeEnvironmentVariables": $(cat env-vars.json)
+                  }
                 },
                 "AutoDeploymentsEnabled": true
               }
