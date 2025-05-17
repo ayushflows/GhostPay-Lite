@@ -50,6 +50,7 @@ jobs:
       - name: Deploy to App Runner
         uses: awslabs/amazon-app-runner-deploy@main
         with:
-          service-name: cicd-pipeline-service        
-          source-provider: ECR                       
-          image-identifier: ${{ steps.login-ecr.outputs.registry }}/cicd-pipeline:latest 
+          service: ghostpay          
+          image: ${{ steps.login-ecr.outputs.registry }}/cicd-pipeline:latest
+          access-role-arn: ${{ secrets.APP_RUNNER_ECR_ROLE_ARN }}  
+          region: ${{ secrets.AWS_REGION }}
