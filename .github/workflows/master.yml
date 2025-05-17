@@ -68,7 +68,7 @@ jobs:
           sed -i '$ s/,$//' env-vars.json
           echo "]" >> env-vars.json
 
-      - name: ✅ DEBUG: Print env-vars.json
+      - name: DEBUG: Print env-vars.json
         run: |
           echo "==== env-vars.json ===="
           cat env-vars.json
@@ -92,7 +92,7 @@ jobs:
             }
             EOF
 
-      - name: ✅ DEBUG: Print update.json
+      - name: DEBUG: Print update.json
         run: |
           echo "==== update.json ===="
           cat update.json
