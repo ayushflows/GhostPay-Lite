@@ -3,6 +3,7 @@ import { auth, requireRole } from '../middleware/auth';
 import { UserRole } from '../models/User';
 import Card, { ICard } from '../models/Card';
 import User from '../models/User';
+import Transaction from '../models/Transaction';
 import mongoose from 'mongoose';
 
 const router = express.Router();
@@ -69,7 +70,36 @@ router.post('/', auth, requireRole([UserRole.MERCHANT]), async (req: Request, re
       });
     }
 
-    // Add transaction
+    // Get merchant and customer details
+    const merchant = await User.findById(merchantId);
+    const customer = await User.findById(card.userId);
+
+    if (!merchant || !customer) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Create transaction record
+    const transaction = new Transaction({
+      amount,
+      cardId: card._id,
+      cardNumber: card.cardNumber,
+      cardHolderName: card.cardHolderName,
+      merchantId: new mongoose.Types.ObjectId(merchantId),
+      merchantName: merchant.name,
+      customerId: card.userId,
+      customerName: customer.name,
+      status: 'completed',
+      description,
+      timestamp: new Date(),
+      metadata: {
+        ipAddress: req.ip,
+        deviceInfo: req.headers['user-agent']
+      }
+    });
+
+    await transaction.save();
+
+    // Add transaction to card
     card.transactions.push({
       amount,
       merchantId: new mongoose.Types.ObjectId(merchantId),
@@ -95,6 +125,7 @@ router.post('/', auth, requireRole([UserRole.MERCHANT]), async (req: Request, re
     res.status(200).json({
       message: 'Charge processed successfully',
       transaction: {
+        id: transaction.transactionId,
         amount,
         status: 'completed',
         timestamp: new Date(),
