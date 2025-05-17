@@ -70,20 +70,20 @@ jobs:
       - name: Prepare App Runner update-service payload
         run: |
           cat <<EOF > update.json
-{
-  "ServiceArn": "${{ secrets.APP_RUNNER_SERVICE_ARN }}",
-  "SourceConfiguration": {
-    "ImageRepository": {
-      "ImageIdentifier": "${{ steps.build-image.outputs.image }}",
-      "ImageRepositoryType": "ECR"
-    },
-    "ImageConfiguration": {
-      "RuntimeEnvironmentVariables": $(cat env-vars.json)
-    },
-    "AutoDeploymentsEnabled": true
-  }
-}
-EOF
+          {
+            "ServiceArn": "${{ secrets.APP_RUNNER_SERVICE_ARN }}",
+            "SourceConfiguration": {
+              "ImageRepository": {
+                "ImageIdentifier": "${{ steps.build-image.outputs.image }}",
+                "ImageRepositoryType": "ECR"
+              },
+              "ImageConfiguration": {
+                "RuntimeEnvironmentVariables": $(cat env-vars.json)
+              },
+              "AutoDeploymentsEnabled": true
+            }
+          }
+          EOF
 
       - name: Update App Runner service with environment variables
         run: |
