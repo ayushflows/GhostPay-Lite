@@ -48,7 +48,7 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }} 
 
       - name: Deploy to App Runner
-        uses: awslabs/amazon-app-runner-deploy@2.5.2   
+        uses: awslabs/amazon-app-runner-deploy@main
         with:
           service-name: cicd-pipeline-service        
           source-provider: ECR                       
